@@ -1343,10 +1343,21 @@ function saveState() {
 // ===========================
 const LB_KEY = 'amw_leaderboard_v1';
 
+function waitForFirebase(timeout = 5000) {
+  return new Promise(resolve => {
+    if (window._fbGet) { resolve(true); return; }
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (window._fbGet) { clearInterval(interval); resolve(true); }
+      else if (Date.now() - start > timeout) { clearInterval(interval); resolve(false); }
+    }, 100);
+  });
+}
+
 async function lbLoad() {
   try {
-    // Try Firebase first, fall back to localStorage
-    if (window._fbGet) {
+    const ready = await waitForFirebase();
+    if (ready) {
       const data = await window._fbGet(LB_KEY);
       return data || {};
     }
@@ -1359,7 +1370,8 @@ async function lbLoad() {
 
 async function lbSave(data) {
   try {
-    if (window._fbSet) {
+    const ready = await waitForFirebase();
+    if (ready) {
       await window._fbSet(LB_KEY, data);
       return;
     }
@@ -1849,6 +1861,11 @@ function finishWorld() {
     attempts: (prev ? prev.attempts : 0) + 1
   };
   saveState();
+
+  // Submit to live leaderboard after every world completion
+  if (state.username) {
+    lbSubmitScore(state.username, state.worldScores);
+  }
 
   showWorldResults(worldId, correct, total);
 }
@@ -2817,3 +2834,4 @@ if (unInputEl) unInputEl.addEventListener('keydown', e => { if (e.key === 'Enter
 
 </body>
 </html>
+
