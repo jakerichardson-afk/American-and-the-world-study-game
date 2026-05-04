@@ -4,6 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>America & the World: 1898–1945</title>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDpUs3ifJDRJ3sl2bmQI-wHOlf7rgeRN-A",
+    authDomain: "america-and-world-game.firebaseapp.com",
+    databaseURL: "https://america-and-world-game-default-rtdb.firebaseio.com",
+    projectId: "america-and-world-game",
+    storageBucket: "america-and-world-game.firebasestorage.app",
+    messagingSenderId: "615044481274",
+    appId: "1:615044481274:web:0548a8d4f0773e9b548943"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  window._fbGet = async (path) => {
+    const snap = await get(ref(db, path));
+    return snap.exists() ? snap.val() : null;
+  };
+  window._fbSet = async (path, value) => {
+    await set(ref(db, path), value);
+  };
+</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Special+Elite&family=Oswald:wght@300;400;600&display=swap');
 
@@ -1320,14 +1345,27 @@ const LB_KEY = 'amw_leaderboard_v1';
 
 async function lbLoad() {
   try {
-    const result = await window.storage.get(LB_KEY, true);
-    return result ? JSON.parse(result.value) : {};
+    // Try Firebase first, fall back to localStorage
+    if (window._fbGet) {
+      const data = await window._fbGet(LB_KEY);
+      return data || {};
+    }
+  } catch(e) {}
+  try {
+    const local = localStorage.getItem(LB_KEY);
+    return local ? JSON.parse(local) : {};
   } catch(e) { return {}; }
 }
 
 async function lbSave(data) {
   try {
-    await window.storage.set(LB_KEY, JSON.stringify(data), true);
+    if (window._fbSet) {
+      await window._fbSet(LB_KEY, data);
+      return;
+    }
+  } catch(e) {}
+  try {
+    localStorage.setItem(LB_KEY, JSON.stringify(data));
   } catch(e) {}
 }
 
