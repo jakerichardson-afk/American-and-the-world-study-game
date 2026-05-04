@@ -4,30 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>America & the World: 1898–1945</title>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+  var _fbDb = null;
+  try {
+    var _fbApp = firebase.initializeApp({
+      apiKey: "AIzaSyDpUs3ifJDRJ3sl2bmQI-wHOlf7rgeRN-A",
+      authDomain: "america-and-world-game.firebaseapp.com",
+      databaseURL: "https://america-and-world-game-default-rtdb.firebaseio.com",
+      projectId: "america-and-world-game",
+      storageBucket: "america-and-world-game.firebasestorage.app",
+      messagingSenderId: "615044481272",
+      appId: "1:615044481274:web:0548a8d4f0773e9b548943"
+    });
+    _fbDb = firebase.database(_fbApp);
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyDpUs3ifJDRJ3sl2bmQI-wHOlf7rgeRN-A",
-    authDomain: "america-and-world-game.firebaseapp.com",
-    databaseURL: "https://america-and-world-game-default-rtdb.firebaseio.com",
-    projectId: "america-and-world-game",
-    storageBucket: "america-and-world-game.firebasestorage.app",
-    messagingSenderId: "615044481274",
-    appId: "1:615044481274:web:0548a8d4f0773e9b548943"
-  };
+    window._fbGetAll = async function() {
+      var snap = await _fbDb.ref('amw_leaderboard_v1').get();
+      console.log('_fbGetAll exists:', snap.exists(), 'val:', JSON.stringify(snap.val()));
+      return snap.exists() ? snap.val() : null;
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
+    window._fbSetUser = async function(username, entry) {
+      var safeName = username.replace(/[.#$[\]\/]/g, '_');
+      var path = 'amw_leaderboard_v1/' + safeName;
+      console.log('Writing to Firebase path:', path);
+      await _fbDb.ref(path).set(entry);
+      console.log('Write complete for:', path);
+    };
 
-  window._fbGet = async (path) => {
-    const snap = await get(ref(db, path));
-    return snap.exists() ? snap.val() : null;
-  };
-  window._fbSet = async (path, value) => {
-    await set(ref(db, path), value);
-  };
+    window._fbReady = true;
+    console.log('Firebase connected successfully');
+  } catch(e) {
+    console.error('Firebase init error:', e.message);
+    window._fbReady = false;
+  }
 </script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Special+Elite&family=Oswald:wght@300;400;600&display=swap');
@@ -1345,10 +1357,10 @@ const LB_KEY = 'amw_leaderboard_v1';
 
 function waitForFirebase(timeout = 5000) {
   return new Promise(resolve => {
-    if (window._fbGet) { resolve(true); return; }
+    if (window._fbReady) { resolve(true); return; }
     const start = Date.now();
     const interval = setInterval(() => {
-      if (window._fbGet) { clearInterval(interval); resolve(true); }
+      if (window._fbReady) { clearInterval(interval); resolve(true); }
       else if (Date.now() - start > timeout) { clearInterval(interval); resolve(false); }
     }, 100);
   });
@@ -1358,30 +1370,41 @@ async function lbLoad() {
   try {
     const ready = await waitForFirebase();
     if (ready) {
-      const data = await window._fbGet(LB_KEY);
+      const data = await window._fbGetAll();
+      console.log('Firebase lbLoad raw data:', JSON.stringify(data));
       return data || {};
     }
-  } catch(e) {}
+  } catch(e) { console.warn('lbLoad Firebase error:', e); }
   try {
     const local = localStorage.getItem(LB_KEY);
     return local ? JSON.parse(local) : {};
   } catch(e) { return {}; }
 }
 
-async function lbSave(data) {
+async function lbSave(data, username) {
   try {
     const ready = await waitForFirebase();
     if (ready) {
-      await window._fbSet(LB_KEY, data);
+      const entry = data[username];
+      console.log('Writing to Firebase path:', LB_KEY + '/' + username);
+      console.log('Entry:', JSON.stringify(entry));
+      await window._fbSetUser(username, entry);
+      console.log('Firebase write confirmed');
       return;
+    } else {
+      console.warn('Firebase not ready, falling back to localStorage');
     }
-  } catch(e) {}
+  } catch(e) {
+    console.error('lbSave Firebase error:', e);
+  }
   try {
     localStorage.setItem(LB_KEY, JSON.stringify(data));
+    console.log('Saved to localStorage as fallback');
   } catch(e) {}
 }
 
 async function lbSubmitScore(username, worldScores) {
+  console.log('lbSubmitScore called for:', username);
   const allWorlds = WORLDS.map(w => {
     const s = worldScores[w.id];
     return { played: !!s, correct: s ? s.correct : 0, total: s ? s.total : 0 };
@@ -1390,13 +1413,17 @@ async function lbSubmitScore(username, worldScores) {
   const totalPossible = allWorlds.reduce((sum, w) => sum + (w.played ? w.total : 0), 0);
   const pct = totalPossible > 0 ? Math.round((totalCorrect / totalPossible) * 100) : 0;
   const worldsPlayed = allWorlds.filter(w => w.played).length;
+  console.log('Score:', pct + '%', '| Worlds played:', worldsPlayed);
 
   const lb = await lbLoad();
   const existing = lb[username];
-  // Only update if score improved or more worlds played
   if (!existing || pct > existing.pct || (pct === existing.pct && worldsPlayed > existing.worldsPlayed)) {
     lb[username] = { username, pct, totalCorrect, totalPossible, worldsPlayed, updated: Date.now() };
-    await lbSave(lb);
+    console.log('Saving to Firebase...');
+    await lbSave(lb, username);
+    console.log('Firebase save complete');
+  } else {
+    console.log('Score not improved, skipping save');
   }
 }
 
@@ -2834,4 +2861,3 @@ if (unInputEl) unInputEl.addEventListener('keydown', e => { if (e.key === 'Enter
 
 </body>
 </html>
-
