@@ -1417,7 +1417,7 @@ async function lbSubmitScore(username, worldScores) {
 
   const lb = await lbLoad();
   const existing = lb[username];
-  if (!existing || pct > existing.pct || (pct === existing.pct && worldsPlayed > existing.worldsPlayed)) {
+  if (!existing || totalCorrect > existing.totalCorrect || (totalCorrect === existing.totalCorrect && worldsPlayed > existing.worldsPlayed)) {
     lb[username] = { username, pct, totalCorrect, totalPossible, worldsPlayed, updated: Date.now() };
     console.log('Saving to Firebase...');
     await lbSave(lb, username);
@@ -1433,7 +1433,8 @@ async function showLeaderboard() {
   document.getElementById('lbUpdated').textContent = '';
 
   const lb = await lbLoad();
-  const rows = Object.values(lb).sort((a, b) => b.pct - a.pct || b.worldsPlayed - a.worldsPlayed || b.totalCorrect - a.totalCorrect);
+  // Sort by total correct answers first, then worlds played as tiebreaker, then % as final tiebreaker
+  const rows = Object.values(lb).sort((a, b) => b.totalCorrect - a.totalCorrect || b.worldsPlayed - a.worldsPlayed || b.pct - a.pct);
 
   const container = document.getElementById('lbRows');
   container.innerHTML = '';
@@ -1443,13 +1444,15 @@ async function showLeaderboard() {
     return;
   }
 
+  const maxPossible = WORLDS.length * 12; // 13 worlds x 12 questions = 156 total
+
   rows.forEach((entry, i) => {
     const rank = i + 1;
     const isMe = state.username && entry.username === state.username;
     let medal = '';
-    if (entry.pct >= 95 && entry.worldsPlayed === 13) medal = '💎';
-    else if (entry.pct >= 85) medal = '🥇';
-    else if (entry.pct >= 70) medal = '🥈';
+    if (entry.totalCorrect >= 140) medal = '💎';
+    else if (entry.totalCorrect >= 100) medal = '🥇';
+    else if (entry.totalCorrect >= 60) medal = '🥈';
     else medal = '🥉';
 
     let rankDisplay = rank;
@@ -1462,7 +1465,7 @@ async function showLeaderboard() {
     row.innerHTML = `
       <div class="lb-rank">${rankDisplay}</div>
       <div class="lb-name">${escHtml(entry.username)}${isMe ? ' ← you' : ''}</div>
-      <div class="lb-pct">${entry.pct}%</div>
+      <div class="lb-pct">${entry.totalCorrect} pts</div>
       <div class="lb-worlds">${entry.worldsPlayed}/13</div>
       <div class="lb-medal">${medal}</div>
     `;
@@ -2861,4 +2864,3 @@ if (unInputEl) unInputEl.addEventListener('keydown', e => { if (e.key === 'Enter
 
 </body>
 </html>
-
