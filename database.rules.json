@@ -1,0 +1,20 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "amw_leaderboard_v1": {
+      ".read": true,
+      "$user": {
+        ".write": "newData.exists() && $user.length >= 1 && $user.length <= 40",
+        ".validate": "newData.hasChildren(['username', 'totalCorrect'])",
+        "username": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30" },
+        "totalCorrect": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+        "totalPossible": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000" },
+        "pct": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 200" },
+        "worldsPlayed": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+        "updated": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
